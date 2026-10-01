@@ -1,9 +1,74 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
-const apiConfigured = Boolean(import.meta.env.VITE_ACCOUNT_API_URL)
+const apiUrl = (import.meta.env.VITE_ACCOUNT_API_URL || '').replace(/\/$/, '')
 
 function App() {
   const [mode, setMode] = useState('register')
+  const [login, setLogin] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmation, setConfirmation] = useState('')
+  const [message, setMessage] = useState('')
+  const [apiOnline, setApiOnline] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (!apiUrl) return
+
+    fetch(`${apiUrl}/api/account/health`)
+      .then((response) => {
+        if (!response.ok) throw new Error('API indisponível')
+        return response.json()
+      })
+      .then(() => setApiOnline(true))
+      .catch(() => setApiOnline(false))
+  }, [])
+
+  function changeMode(nextMode) {
+    setMode(nextMode)
+    setMessage('')
+    setConfirmation('')
+  }
+
+  async function submit(event) {
+    event.preventDefault()
+    setMessage('')
+
+    if (!apiUrl) {
+      setMessage('A API ainda não foi configurada neste ambiente.')
+      return
+    }
+    if (mode === 'register' && password !== confirmation) {
+      setMessage('As senhas não conferem.')
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      const response = await fetch(`${apiUrl}/api/account/${mode}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ login, password }),
+      })
+      const payload = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error(payload.message || 'Não foi possível concluir a operação.')
+      }
+
+      if (mode === 'login' && payload.accessToken) {
+        sessionStorage.setItem('l2newera.accountToken', payload.accessToken)
+      }
+      setMessage(payload.message || (mode === 'register' ? 'Conta criada.' : 'Login realizado.'))
+      if (mode === 'register') {
+        setMode('login')
+        setConfirmation('')
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Erro de comunicação com a API.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   return (
     <main className="page-shell">
@@ -15,8 +80,8 @@ function App() {
           acessa o banco do jogo diretamente.
         </p>
         <div className="status-pill">
-          <span className={apiConfigured ? 'status-dot online' : 'status-dot'} />
-          {apiConfigured ? 'API configurada' : 'Portal em preparação'}
+          <span className={apiOnline ? 'status-dot online' : 'status-dot'} />
+          {apiOnline ? 'API local online' : apiUrl ? 'API configurada, aguardando resposta' : 'API não configurada'}
         </div>
       </section>
 
@@ -24,7 +89,7 @@ function App() {
         <div className="tabs" role="tablist" aria-label="Conta">
           <button
             className={mode === 'register' ? 'tab active' : 'tab'}
-            onClick={() => setMode('register')}
+            onClick={() => changeMode('register')}
             role="tab"
             aria-selected={mode === 'register'}
           >
@@ -32,7 +97,7 @@ function App() {
           </button>
           <button
             className={mode === 'login' ? 'tab active' : 'tab'}
-            onClick={() => setMode('login')}
+            onClick={() => changeMode('login')}
             role="tab"
             aria-selected={mode === 'login'}
           >
@@ -45,33 +110,35 @@ function App() {
         </h2>
         <p className="muted">
           {mode === 'register'
-            ? 'O cadastro será conectado à Account API na próxima entrega.'
-            : 'O login web usará uma sessão própria, separada do protocolo do jogo.'}
+            ? 'Teste local conectado à Account API e ao PostgreSQL do ambiente.'
+            : 'O login web usa uma sessão própria, separada do protocolo do jogo.'}
         </p>
 
-        <form onSubmit={(event) => event.preventDefault()}>
-          {mode === 'register' && (
-            <label>
-              E-mail
-              <input type="email" placeholder="voce@exemplo.com" autoComplete="email" disabled />
-            </label>
-          )}
+        <form onSubmit={submit}>
           <label>
             Login
-            <input type="text" placeholder="Seu login" autoComplete="username" disabled />
+            <input type="text" placeholder="Seu login" autoComplete="username" value={login} onChange={(event) => setLogin(event.target.value)} required />
           </label>
           <label>
             Senha
-            <input type="password" placeholder="Mínimo de 8 caracteres" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} disabled />
+            <input type="password" placeholder="Mínimo de 8 caracteres" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} required />
           </label>
-          <button className="primary-button" type="submit" disabled>
-            {mode === 'register' ? 'Cadastrar' : 'Entrar'}
+          {mode === 'register' && (
+            <label>
+              Confirmar senha
+              <input type="password" placeholder="Repita a senha" autoComplete="new-password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} required />
+            </label>
+          )}
+          <button className="primary-button" type="submit" disabled={submitting || !apiUrl}>
+            {submitting ? 'Aguarde...' : mode === 'register' ? 'Cadastrar' : 'Entrar'}
           </button>
         </form>
 
+        {message && <p className="security-note" role="status">{message}</p>}
+
         <p className="security-note">
-          O formulário ficará ativo quando a API pública segura estiver
-          disponível. Nenhum segredo do servidor será enviado ao navegador.
+          Este teste envia somente login e senha para a Account API configurada.
+          Nenhuma credencial do banco é enviada ao navegador.
         </p>
       </section>
     </main>

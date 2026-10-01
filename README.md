@@ -12,8 +12,9 @@ implementados por uma Account API/BFF server-side. Essa API chamará a Game API
 interna por HMAC em uma rede privada.
 
 Na primeira entrega, a Account API existe dentro do processo do GameServer,
-com porta separada e bind de loopback. O frontend ainda não habilita seus
-formulários até que HTTPS, proxy reverso e a etapa de e-mail estejam prontos.
+com porta separada. No desenvolvimento local, os formulários podem apontar
+para `http://127.0.0.1:9090`; no GitHub Pages a URL da API fica vazia até que
+HTTPS, proxy reverso e a etapa de e-mail estejam prontos.
 
 ## Desenvolvimento
 
@@ -21,8 +22,13 @@ Requer Node.js e pnpm:
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm run dev
+VITE_ACCOUNT_API_URL=http://127.0.0.1:9090 pnpm run dev
 ```
+
+No ambiente Docker local, o backend precisa estar com a Account API habilitada
+em `http://127.0.0.1:9090` e aceitar a origem `http://localhost:5173`.
+O formulário de cadastro cria somente login e senha, que são persistidos no
+PostgreSQL local; e-mail será adicionado junto com o fluxo de verificação.
 
 ## Publicação no GitHub Pages
 
